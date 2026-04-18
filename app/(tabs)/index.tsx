@@ -74,42 +74,53 @@ export default function HomeScreen() {
           />
 
           <View style={styles.headerRow}>
-            <Pressable style={styles.profileCircle}>
-              <Image
-                source={require('@/assets/home/profile-icon.png')}
-                style={styles.profileCircleImage}
-                contentFit="contain"
-              />
-            </Pressable>
-
-            <Pressable style={styles.loginButton}>
-              <Text style={styles.loginButtonText}>Войти.</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.glassCard}>
-            <View style={styles.glassOverlay} />
-
-            <View style={styles.glassInner}>
-              <View style={styles.heroTextLines}>
-                <View style={styles.redLineTop} />
-                <View style={styles.redLineBottom} />
-              </View>
-
-              <Text style={styles.heroDescription}>
-                Подарите дом тому, кто подходит вам. Мультиплатформа для людей, кто хочет завести
-                питомца или стать хозяином
-              </Text>
-
-              <View style={styles.startWrap}>
+            <View style={styles.headerLeftGroup}>
+              <Pressable style={styles.profileCircle}>
                 <Image
-                  source={require('@/assets/home/top-cat.png')}
-                  style={styles.startCat}
+                  source={require('@/assets/home/profile-icon.png')}
+                  style={styles.profileCircleImage}
                   contentFit="contain"
                 />
-                <Pressable style={styles.startButton}>
-                  <Text style={styles.startButtonText}>Начать.</Text>
-                </Pressable>
+              </Pressable>
+
+              <Pressable style={styles.loginButton}>
+                <Text style={styles.loginButtonText}>Войти.</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.glassCardWrap}>
+            <View style={styles.glassLeftStripe} />
+
+            <View style={styles.glassCard}>
+              <View style={styles.glassOverlay} />
+
+              <View style={styles.glassInner}>
+                <Text style={styles.heroTitle}>
+                  НАЙДИТЕ <Text style={styles.heroAccent}>своего</Text> ПИТОМЦА.
+                </Text>
+
+                <View style={styles.heroTextLines}>
+                  <View style={styles.redLineTop} />
+                  <View style={styles.redLineBottom} />
+                </View>
+
+                <Text style={styles.heroDescription}>
+                  Подарите дом тому, кто подходит вам. Мультиплатформа для людей, кто хочет завести
+                  питомца или стать хозяином
+                </Text>
+
+                <View style={styles.startWrap}>
+                  <Pressable style={styles.startButton}>
+                    <Text style={styles.startButtonText}>Начать.</Text>
+
+                    <Image
+                      source={require('@/assets/home/top-cat.png')}
+                      style={styles.startCat}
+                      contentFit="contain"
+                    />
+                  </Pressable>
+                </View>
               </View>
             </View>
           </View>
@@ -256,7 +267,7 @@ const styles = StyleSheet.create({
   },
 
   videoTopSection: {
-    minHeight: 560,
+    minHeight: 620,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -293,19 +304,21 @@ const styles = StyleSheet.create({
   topRat: {
     position: 'absolute',
     top: 10,
-    right: 32,
+    right: 10,  // было 32, теперь ближе к правому краю
     width: 150,
     height: 64,
-    zIndex: 2,
   },
 
   headerRow: {
     paddingTop: 20,
     paddingHorizontal: 10,
+    zIndex: 4,
+  },
+
+  headerLeftGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    zIndex: 4,
+    gap: 10,
   },
 
   profileCircle: {
@@ -326,7 +339,7 @@ const styles = StyleSheet.create({
   loginButton: {
     backgroundColor: CREAM,
     borderRadius: 999,
-    minWidth: 88,
+    minWidth: 110,
     paddingHorizontal: 24,
     paddingVertical: 10,
     alignItems: 'center',
@@ -339,11 +352,28 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 
+  glassCardWrap: {
+    marginTop: 28,
+    marginHorizontal: 22,
+    position: 'relative',
+    zIndex: 3,
+  },
+
+  glassLeftStripe: {
+    position: 'absolute',
+    left: -10,
+    top: 28,
+    bottom: 28,
+    width: 10,
+    backgroundColor: RED,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
+    zIndex: 4,
+  },
+
   glassCard: {
-    marginTop: 22,
-    marginHorizontal: 34,
-    minHeight: 300,
-    borderRadius: 34,
+    minHeight: 380,
+    borderRadius: 38,
     overflow: 'hidden',
     borderWidth: 10,
     borderColor: CREAM,
@@ -358,66 +388,88 @@ const styles = StyleSheet.create({
 
   glassInner: {
     flex: 1,
-    paddingHorizontal: 22,
-    paddingTop: 38,
-    paddingBottom: 26,
+    paddingHorizontal: 24,
+    paddingTop: 34,
+    paddingBottom: 28,
     justifyContent: 'space-between',
   },
 
+  heroTitle: {
+    color: '#f1eee7',
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+
+  heroAccent: {
+    color: '#b11f22',
+    fontStyle: 'italic',
+  },
+
   heroTextLines: {
-    alignItems: 'flex-end',
-    paddingRight: 24,
+    alignItems: 'center',
+    marginBottom: 8,
   },
 
   redLineTop: {
-    width: 66,
+    width: 76,
     height: 2,
     backgroundColor: '#a34545',
-    marginBottom: 18,
+    marginBottom: 14,
   },
 
   redLineBottom: {
-    width: 44,
+    width: 52,
     height: 2,
     backgroundColor: '#a34545',
   },
 
   heroDescription: {
     color: TEXT_LIGHT,
-    fontSize: 14,
-    lineHeight: 22,
-    maxWidth: 240,
-    marginTop: 10,
+    fontSize: 15,
+    lineHeight: 23,
+    textAlign: 'center',
+    maxWidth: 270,
+    alignSelf: 'center',
+    marginTop: 8,
   },
 
-  startWrap: {
+startWrap: {
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginLeft: 4,
-    marginTop: 14,
-  },
-
-  startCat: {
-    position: 'absolute',
-    top: -26,
-    width: 110,
-    height: 56,
-    zIndex: 2,
-  },
+    alignSelf: 'center',
+    marginTop: 18,
+    justifyContent: 'center',  // добавить для вертикальной центровки содержимого
+},
 
   startButton: {
     backgroundColor: '#e4d4bd',
     borderRadius: 999,
-    paddingHorizontal: 42,
+    paddingLeft: 42,
+    paddingRight: 86,
     paddingVertical: 16,
-    minWidth: 220,
+    minWidth: 250,
     alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+
+  startCat: {
+    position: 'absolute',
+    right: 7,
+    top: '-60%',
+    width: 98,
+    height: 62,
+    zIndex: 2,
+    transform: [{ translateY: -26 }],
   },
 
   startButtonText: {
     color: OLIVE,
     fontSize: 26,
     fontWeight: '900',
+    alignSelf: 'flex-start',
   },
 
   middleRedStripe: {
@@ -625,7 +677,7 @@ const styles = StyleSheet.create({
   footerBrandRow: {
     marginTop: 16,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
     zIndex: 2,
   },
@@ -644,7 +696,7 @@ const styles = StyleSheet.create({
   },
 
   footerMiniCat: {
-    width: 74,
-    height: 74,
+    width: 132,
+    height: 132,
   },
 });
