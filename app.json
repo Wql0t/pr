@@ -27,7 +27,13 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-video"
+      "expo-video",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Приложение использует фото, чтобы добавить снимок питомца в анкету."
+        }
+      ]
     ]
   }
 }

@@ -1,5 +1,5 @@
 import {
-  Image,
+  Alert,
   ImageBackground,
   Pressable,
   SafeAreaView,
@@ -13,11 +13,12 @@ import { FONTS } from '../ui/authStyles';
 
 type Props = {
   onBack?: () => void;
+  onLogout?: () => void | Promise<void>;
 };
 
 const fields = ['Телефон', 'Пол', 'Возраст', 'Описание', 'Аллергии'];
 
-export function ProfileDetailsScreen({ onBack }: Props) {
+export function ProfileDetailsScreen({ onBack, onLogout }: Props) {
   const { width, height } = useWindowDimensions();
 
   const isSmall = width < 360;
@@ -70,7 +71,22 @@ export function ProfileDetailsScreen({ onBack }: Props) {
     topRowMarginBottom: isTablet ? 16 : 10,
     titleCardMarginBottom: isTablet ? 24 : 18,
     submitMarginTop: isTablet ? 24 : 18,
+    logoutMarginTop: isTablet ? 16 : 12,
   };
+
+  function confirmLogout() {
+    if (!onLogout) return;
+    Alert.alert('Выход из аккаунта', 'Выйти из текущего аккаунта?', [
+      { text: 'Отмена', style: 'cancel' },
+      {
+        text: 'Выйти',
+        style: 'destructive',
+        onPress: () => {
+          void Promise.resolve(onLogout());
+        },
+      },
+    ]);
+  }
 
   return (
     <View style={s.root}>
@@ -188,7 +204,26 @@ export function ProfileDetailsScreen({ onBack }: Props) {
                 ЗАВЕРШИТЬ
               </Text>
             </Pressable>
-          
+
+            {onLogout ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Выйти из аккаунта"
+                onPress={confirmLogout}
+                style={({ pressed }) => [
+                  s.logoutBtn,
+                  {
+                    marginTop: ui.logoutMarginTop,
+                    minWidth: ui.submitMinWidth,
+                    paddingHorizontal: ui.submitPadX,
+                    paddingVertical: ui.submitPadY - 2,
+                  },
+                  pressed && s.pressed,
+                ]}
+              >
+                <Text style={[s.logoutText, { fontSize: isTablet ? 16 : isSmall ? 13 : 14 }]}>Выйти из аккаунта</Text>
+              </Pressable>
+            ) : null}
         </SafeAreaView>
       </ImageBackground>
     </View>
@@ -301,6 +336,22 @@ const s = StyleSheet.create({
     color: '#fffdf6',
     fontFamily: FONTS.title,
     textTransform: 'uppercase',
+  },
+
+  logoutBtn: {
+    alignSelf: 'center',
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderWidth: 2,
+    borderColor: 'rgba(154, 74, 74, 0.55)',
+  },
+
+  logoutText: {
+    color: '#8f4545',
+    fontFamily: FONTS.title,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+    textAlign: 'center',
   },
 
   pressed: {

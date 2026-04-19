@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   Image,
   ImageBackground,
   Platform,
@@ -11,7 +12,10 @@ import {
   TextInput,
   useWindowDimensions,
   View,
+  ActivityIndicator,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { addQuestionnaire } from '../feed/questionnaireStorage';
 
 const OLIVE = '#6b704c';
 const OLIVE_SOFT = 'rgba(107, 112, 76, 0.22)';
@@ -73,6 +77,8 @@ export function CreateQuestionnaireScreen({ onBack, onComplete }: Props) {
   const [yearsOld, setYearsOld] = useState('');
   const [monthsOld, setMonthsOld] = useState('');
   const [aboutPet, setAboutPet] = useState('');
+  const [photos, setPhotos] = useState<(string | null)[]>([null, null, null]);
+  const [saving, setSaving] = useState(false);
 
   const aspect = cardImageAspectRatio();
   const serif = serifFont();
@@ -157,6 +163,63 @@ export function CreateQuestionnaireScreen({ onBack, onComplete }: Props) {
   }, [screenW, screenH, isTablet, isSmall, isShort, aspect]);
 
   const serifText = (px: number) => ({ fontFamily: serif, fontSize: px });
+
+  async function pickPhoto(slot: 0 | 1 | 2) {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Доступ к фото', 'Разрешите доступ к галерее, чтобы добавить снимок.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: slot === 2 ? [16, 9] : [1, 1],
+        quality: 0.75,
+        base64: true,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      let uri: string;
+      if (asset.base64) {
+        const rawType = asset.mimeType?.split('/')[1];
+        const ext = rawType === 'png' ? 'png' : 'jpeg';
+        uri = `data:image/${ext};base64,${asset.base64}`;
+      } else if (asset.uri) {
+        uri = asset.uri;
+      } else {
+        return;
+      }
+      setPhotos((prev) => {
+        const copy = [...prev];
+        copy[slot] = uri;
+        return copy;
+      });
+    } catch {
+      Alert.alert('Ошибка', 'Не удалось выбрать фото.');
+    }
+  }
+
+  async function publishQuestionnaire() {
+    if (!petType) return;
+    setSaving(true);
+    try {
+      await addQuestionnaire({
+        petType,
+        petName,
+        yearsOld,
+        monthsOld,
+        aboutPet,
+        imageUris: photos.filter((p): p is string => Boolean(p && p.length > 0)),
+      });
+      setPhotos([null, null, null]);
+      onComplete?.();
+    } catch {
+      Alert.alert('Ошибка', 'Не удалось сохранить анкету в хранилище.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   let ok = true;
   if (step === 0) ok = petType != null;
@@ -394,42 +457,60 @@ export function CreateQuestionnaireScreen({ onBack, onComplete }: Props) {
         </Text>
 
         <View style={[styles.photoRow, { gap: isTablet ? 14 : 12, marginBottom: 12 }]}>
-          <Pressable style={[styles.photoSlot, { borderRadius: isTablet ? 16 : 14 }]}>
-            <Text
-              style={[
-                styles.plusCircle,
-                {
-                  width: isTablet ? 42 : 36,
-                  height: isTablet ? 42 : 36,
-                  borderRadius: isTablet ? 21 : 18,
-                  lineHeight: isTablet ? 40 : 34,
-                  fontSize: isTablet ? 26 : 22,
-                },
-              ]}
-            >
-              +
-            </Text>
+          <Pressable
+            accessibilityLabel="Добавить фото 1"
+            onPress={() => void pickPhoto(0)}
+            style={[styles.photoSlot, { borderRadius: isTablet ? 16 : 14 }]}
+          >
+            {photos[0] ? (
+              <Image source={{ uri: photos[0] }} style={styles.photoFilled} resizeMode="cover" />
+            ) : (
+              <Text
+                style={[
+                  styles.plusCircle,
+                  {
+                    width: isTablet ? 42 : 36,
+                    height: isTablet ? 42 : 36,
+                    borderRadius: isTablet ? 21 : 18,
+                    lineHeight: isTablet ? 40 : 34,
+                    fontSize: isTablet ? 26 : 22,
+                  },
+                ]}
+              >
+                +
+              </Text>
+            )}
           </Pressable>
 
-          <Pressable style={[styles.photoSlot, { borderRadius: isTablet ? 16 : 14 }]}>
-            <Text
-              style={[
-                styles.plusCircle,
-                {
-                  width: isTablet ? 42 : 36,
-                  height: isTablet ? 42 : 36,
-                  borderRadius: isTablet ? 21 : 18,
-                  lineHeight: isTablet ? 40 : 34,
-                  fontSize: isTablet ? 26 : 22,
-                },
-              ]}
-            >
-              +
-            </Text>
+          <Pressable
+            accessibilityLabel="Добавить фото 2"
+            onPress={() => void pickPhoto(1)}
+            style={[styles.photoSlot, { borderRadius: isTablet ? 16 : 14 }]}
+          >
+            {photos[1] ? (
+              <Image source={{ uri: photos[1] }} style={styles.photoFilled} resizeMode="cover" />
+            ) : (
+              <Text
+                style={[
+                  styles.plusCircle,
+                  {
+                    width: isTablet ? 42 : 36,
+                    height: isTablet ? 42 : 36,
+                    borderRadius: isTablet ? 21 : 18,
+                    lineHeight: isTablet ? 40 : 34,
+                    fontSize: isTablet ? 26 : 22,
+                  },
+                ]}
+              >
+                +
+              </Text>
+            )}
           </Pressable>
         </View>
 
         <Pressable
+          accessibilityLabel="Добавить широкое фото"
+          onPress={() => void pickPhoto(2)}
           style={[
             styles.photoSlotWide,
             {
@@ -438,20 +519,24 @@ export function CreateQuestionnaireScreen({ onBack, onComplete }: Props) {
             },
           ]}
         >
-          <Text
-            style={[
-              styles.plusCircle,
-              {
-                width: isTablet ? 42 : 36,
-                height: isTablet ? 42 : 36,
-                borderRadius: isTablet ? 21 : 18,
-                lineHeight: isTablet ? 40 : 34,
-                fontSize: isTablet ? 26 : 22,
-              },
-            ]}
-          >
-            +
-          </Text>
+          {photos[2] ? (
+            <Image source={{ uri: photos[2] }} style={styles.photoFilledWide} resizeMode="cover" />
+          ) : (
+            <Text
+              style={[
+                styles.plusCircle,
+                {
+                  width: isTablet ? 42 : 36,
+                  height: isTablet ? 42 : 36,
+                  borderRadius: isTablet ? 21 : 18,
+                  lineHeight: isTablet ? 40 : 34,
+                  fontSize: isTablet ? 26 : 22,
+                },
+              ]}
+            >
+              +
+            </Text>
+          )}
         </Pressable>
 
         <Pressable
@@ -488,10 +573,16 @@ export function CreateQuestionnaireScreen({ onBack, onComplete }: Props) {
               paddingHorizontal: isTablet ? 34 : 28,
               borderRadius: isTablet ? 18 : 16,
             },
+            saving && styles.finishBtnDisabled,
           ]}
-          onPress={() => onComplete?.()}
+          disabled={saving}
+          onPress={() => void publishQuestionnaire()}
         >
-          <Text style={[styles.finishBtnText, serifText(ui.bodyPx + 1)]}>Выложить анкету</Text>
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={[styles.finishBtnText, serifText(ui.bodyPx + 1)]}>Выложить анкету</Text>
+          )}
         </Pressable>
       </>
     );
@@ -710,6 +801,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.35)',
+    overflow: 'hidden',
   },
 
   photoSlotWide: {
@@ -720,6 +812,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.35)',
     marginBottom: 12,
+    overflow: 'hidden',
+  },
+
+  photoFilled: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+
+  photoFilledWide: {
+    width: '100%',
+    height: '100%',
   },
 
   plusCircle: {
@@ -734,6 +838,12 @@ const styles = StyleSheet.create({
     marginTop: 20,
     alignSelf: 'center',
     backgroundColor: OLIVE,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+
+  finishBtnDisabled: {
+    opacity: 0.65,
   },
 
   finishBtnText: {

@@ -1,26 +1,64 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Image,
   ImageBackground,
+  Modal,
   PanResponder,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
+  type ImageSourcePropType,
 } from 'react-native';
+import {
+  formatQuestionnaireSubtitle,
+  loadQuestionnaires,
+  questionnaireCoverSource,
+} from '../feed/questionnaireStorage';
 
-type CardItem = {
+export type CardItem = {
   id: string;
   title: string;
   subtitle?: string;
   description: string;
-  image: any;
+  image: ImageSourcePropType;
 };
 
+function builtInDemoCards(): CardItem[] {
+  return [
+    {
+      id: 'demo-1',
+      title: 'Гречка',
+      subtitle: '67 мес',
+      description:
+        'Практический опыт показывает, что сложившаяся структура организации способствует повышению актуальности существующих финансовых и административных условий.',
+      image: require('../../assets/gr1.png'),
+    },
+    {
+      id: 'demo-2',
+      title: 'Мурзик',
+      subtitle: '24 мес',
+      description:
+        'Разнообразный и богатый опыт говорит о том, что новая модель организационной деятельности требует анализа дальнейших направлений развития.',
+      image: require('../../assets/gr2.png'),
+    },
+    {
+      id: 'demo-3',
+      title: 'Бобик',
+      subtitle: '14 мес',
+      description:
+        'Значимость этих проблем настолько очевидна, что постоянный количественный рост и сфера нашей активности обеспечивает актуальность новых предложений.',
+      image: require('../../assets/gr3.png'),
+    },
+  ];
+}
+
 type Props = {
+  feedReloadKey?: number;
   onBack?: () => void;
   onSwipeLeft?: (card: CardItem) => void;
   onSwipeRight?: (card: CardItem) => void;
@@ -28,23 +66,29 @@ type Props = {
 };
 
 function stubSwipeLeft(card: CardItem) {
-  console.log('swipe left не / нравится', card.id);
+  console.log('swipe left', card.id);
 }
 function stubSwipeRight(card: CardItem) {
-  console.log('swipe right / нравится', card.id);
+  console.log('swipe right', card.id);
 }
 function stubSwipeUp(card: CardItem) {
-  console.log('swipe up / Сохранить', card.id);
+  console.log('swipe up', card.id);
 }
 
-export function CardsScreen({ onBack, onSwipeLeft, onSwipeRight, onSwipeUp }: Props) {
+export function CardsScreen({
+  feedReloadKey = 0,
+  onBack,
+  onSwipeLeft,
+  onSwipeRight,
+  onSwipeUp,
+}: Props) {
   const { width: screenW, height: screenH } = useWindowDimensions();
 
   const isSmall = screenW < 360;
   const isTablet = screenW >= 768;
 
-  const SWIPE_THRESHOLD = Math.min(140, screenW * 0.28);
-  const SWIPE_UP_THRESHOLD = Math.min(140, screenH * 0.18);
+  const SWIPE_THRESHOLD = Math.min(120, screenW * 0.22);
+  const SWIPE_UP_THRESHOLD = Math.min(120, screenH * 0.16);
 
   const ui = useMemo(() => {
     const horizontalPadding = isTablet ? 28 : 16;
@@ -72,176 +116,208 @@ export function CardsScreen({ onBack, onSwipeLeft, onSwipeRight, onSwipeUp }: Pr
       hintSize: isTablet ? 15 : 13,
       topPadding: isTablet ? 12 : 6,
       bottomPadding: isTablet ? 24 : 18,
-      stackOffset: isTablet ? 14 : 10,
     };
   }, [screenW, screenH, isSmall, isTablet]);
 
-  const cards = useMemo<CardItem[]>(
-    () => [
-      {
-        id: '1',
-        title: 'Гречка',
-        subtitle: '67 мес',
-        description:
-          'Практический опыт показывает, что сложившаяся структура организации способствует повышению актуальности существующих финансовых и административных условий.',
-        image: require('../../assets/gr1.png'),
-      },
-      {
-        id: '2',
-        title: 'Мурзик',
-        subtitle: '24 мес',
-        description:
-          'Разнообразный и богатый опыт говорит о том, что новая модель организационной деятельности требует анализа дальнейших направлений развития.',
-        image: require('../../assets/gr2.png'),
-      },
-      {
-        id: '3',
-        title: 'Бобик',
-        subtitle: '14 мес',
-        description:
-          'Значимость этих проблем настолько очевидна, что постоянный количественный рост и сфера нашей активности обеспечивает актуальность новых предложений.',
-        image: require('../../assets/gr3.png'),
-      },
-    ],
-    []
-  );
-
+  const [cards, setCards] = useState<CardItem[]>(builtInDemoCards);
   const [index, setIndex] = useState(0);
+  const [detailOpen, setDetailOpen] = useState(false);
   const position = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const enterOpacity = useRef(new Animated.Value(1)).current;
+
+  const cardsRef = useRef(cards);
+  const indexRef = useRef(index);
+  cardsRef.current = cards;
+  indexRef.current = index;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const stored = await loadQuestionnaires();
+      const fromUser: CardItem[] = stored.map((q) => ({
+        id: q.id,
+        title: q.petName,
+        subtitle: formatQuestionnaireSubtitle(q),
+        description: q.aboutPet,
+        image: questionnaireCoverSource(q),
+      }));
+      const merged = [...fromUser, ...builtInDemoCards()];
+      if (!cancelled) {
+        setCards(merged);
+        setIndex(0);
+        position.setValue({ x: 0, y: 0 });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [feedReloadKey]);
+
+  useEffect(() => {
+    enterOpacity.setValue(0.88);
+    Animated.timing(enterOpacity, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [index, enterOpacity]);
 
   const current = cards[index];
-  const next = cards[(index + 1) % cards.length];
 
   const handleLeft = onSwipeLeft ?? stubSwipeLeft;
   const handleRight = onSwipeRight ?? stubSwipeRight;
   const handleUp = onSwipeUp ?? stubSwipeUp;
 
-  const rotate = position.x.interpolate({
-    inputRange: [-screenW / 2, 0, screenW / 2],
-    outputRange: ['-14deg', '0deg', '14deg'],
-    extrapolate: 'clamp',
-  });
+  const handleLeftRef = useRef(handleLeft);
+  const handleRightRef = useRef(handleRight);
+  const handleUpRef = useRef(handleUp);
+  handleLeftRef.current = handleLeft;
+  handleRightRef.current = handleRight;
+  handleUpRef.current = handleUp;
 
-  const currentCardStyle = {
-    transform: [{ translateX: position.x }, { translateY: position.y }, { rotate }],
-  };
+  const rotate = useMemo(
+    () =>
+      position.x.interpolate({
+        inputRange: [-screenW / 2, 0, screenW / 2],
+        outputRange: ['-10deg', '0deg', '10deg'],
+        extrapolate: 'clamp',
+      }),
+    [position.x, screenW]
+  );
 
-  const nextCardScale = position.x.interpolate({
-    inputRange: [-screenW, 0, screenW],
-    outputRange: [1, 0.96, 1],
-    extrapolate: 'clamp',
-  });
+  const cardMotionStyle = useMemo(
+    () => ({
+      transform: [{ translateX: position.x }, { translateY: position.y }, { rotate }],
+      opacity: enterOpacity,
+    }),
+    [position.x, position.y, rotate, enterOpacity]
+  );
 
-  const nextCardTranslateY = position.x.interpolate({
-    inputRange: [-screenW, 0, screenW],
-    outputRange: [0, ui.stackOffset, 0],
-    extrapolate: 'clamp',
-  });
-
-  const nextCardTranslateYFromUp = position.y.interpolate({
-    inputRange: [-screenH, 0],
-    outputRange: [0, ui.stackOffset],
-    extrapolate: 'clamp',
-  });
-
-  const nextCardOpacity = position.x.interpolate({
-    inputRange: [-screenW, 0, screenW],
-    outputRange: [1, 0.88, 1],
-    extrapolate: 'clamp',
-  });
-
-  const likeOpacity = position.x.interpolate({
-    inputRange: [0, SWIPE_THRESHOLD * 0.45, SWIPE_THRESHOLD],
-    outputRange: [0, 0.55, 1],
-    extrapolate: 'clamp',
-  });
-
-  const nopeOpacity = position.x.interpolate({
-    inputRange: [-SWIPE_THRESHOLD, -SWIPE_THRESHOLD * 0.45, 0],
-    outputRange: [1, 0.55, 0],
-    extrapolate: 'clamp',
-  });
-
-  const saveOpacity = position.y.interpolate({
-    inputRange: [-SWIPE_UP_THRESHOLD, -SWIPE_UP_THRESHOLD * 0.5, 0],
-    outputRange: [1, 0.55, 0],
-    extrapolate: 'clamp',
-  });
-
-  const likeRotate = position.x.interpolate({
-    inputRange: [0, screenW / 2],
-    outputRange: ['0deg', '10deg'],
-    extrapolate: 'clamp',
-  });
-
-  const nopeRotate = position.x.interpolate({
-    inputRange: [-screenW / 2, 0],
-    outputRange: ['-10deg', '0deg'],
-    extrapolate: 'clamp',
-  });
-
-  const resetPosition = () => {
+  const resetPosition = useCallback(() => {
     Animated.spring(position, {
       toValue: { x: 0, y: 0 },
       useNativeDriver: true,
-      friction: 6,
-      tension: 80,
+      friction: 7,
+      tension: 70,
     }).start();
-  };
+  }, [position]);
 
-  const finishSwipe = (dir: 'left' | 'right' | 'up') => {
-    const toX = dir === 'right' ? screenW * 1.25 : dir === 'left' ? -screenW * 1.25 : 0;
-    const toY = dir === 'up' ? -screenH * 1.1 : dir === 'left' || dir === 'right' ? 40 : 0;
+  const finishSwipe = useCallback(
+    (dir: 'left' | 'right' | 'up') => {
+      const toX = dir === 'right' ? screenW * 1.2 : dir === 'left' ? -screenW * 1.2 : 0;
+      const toY = dir === 'up' ? -screenH * 1.05 : dir === 'left' || dir === 'right' ? 28 : 0;
 
-    Animated.timing(position, {
-      toValue: { x: toX, y: toY },
-      duration: 240,
-      useNativeDriver: true,
-    }).start(() => {
-      const swiped = cards[index];
+      Animated.timing(position, {
+        toValue: { x: toX, y: toY },
+        duration: 240,
+        useNativeDriver: true,
+      }).start(() => {
+        const list = cardsRef.current;
+        const idx = indexRef.current;
+        const swiped = list[idx];
 
-      if (swiped) {
-        if (dir === 'right') handleRight(swiped);
-        else if (dir === 'left') handleLeft(swiped);
-        else handleUp(swiped);
-      }
-
-      position.setValue({ x: 0, y: 0 });
-      setIndex((v) => (v + 1) % cards.length);
-    });
-  };
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6,
-      onPanResponderMove: (_, g) => {
-        position.setValue({ x: g.dx, y: g.dy });
-      },
-      onPanResponderRelease: (_, g) => {
-        if (!current) return;
-
-        if (g.dy < -SWIPE_UP_THRESHOLD && Math.abs(g.dx) < SWIPE_THRESHOLD * 0.85) {
-          finishSwipe('up');
-          return;
+        if (swiped) {
+          if (dir === 'right') handleRightRef.current(swiped);
+          else if (dir === 'left') handleLeftRef.current(swiped);
+          else handleUpRef.current(swiped);
         }
 
-        if (g.dx > SWIPE_THRESHOLD) {
-          finishSwipe('right');
-          return;
-        }
+        position.setValue({ x: 0, y: 0 });
+        setIndex((v) => (v + 1) % list.length);
+      });
+    },
+    [position, screenH, screenW]
+  );
 
-        if (g.dx < -SWIPE_THRESHOLD) {
-          finishSwipe('left');
-          return;
-        }
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8,
+        onPanResponderMove: (_, g) => {
+          position.setValue({ x: g.dx, y: g.dy });
+        },
+        onPanResponderRelease: (_, g) => {
+          const list = cardsRef.current;
+          const idx = indexRef.current;
+          if (!list[idx]) return;
 
-        resetPosition();
-      },
-    })
-  ).current;
+          if (g.dy < -SWIPE_UP_THRESHOLD && Math.abs(g.dx) < SWIPE_THRESHOLD * 0.9) {
+            finishSwipe('up');
+            return;
+          }
+          if (g.dx > SWIPE_THRESHOLD) {
+            finishSwipe('right');
+            return;
+          }
+          if (g.dx < -SWIPE_THRESHOLD) {
+            finishSwipe('left');
+            return;
+          }
+
+          resetPosition();
+        },
+      }),
+    [SWIPE_THRESHOLD, SWIPE_UP_THRESHOLD, finishSwipe, position, resetPosition]
+  );
 
   return (
     <ImageBackground source={require('../../assets/bg.jpg')} style={s.bg} resizeMode="cover">
+      <Modal
+        visible={detailOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDetailOpen(false)}
+      >
+        <Pressable style={s.modalOverlay} onPress={() => setDetailOpen(false)}>
+          <Pressable style={[s.modalCard, { maxWidth: Math.min(ui.cardWidth + 40, screenW - 32) }]} onPress={() => {}}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { fontSize: isTablet ? 20 : 17 }]}>Анкета</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Закрыть"
+                onPress={() => setDetailOpen(false)}
+                style={({ pressed }) => [s.modalCloseBtn, pressed && s.pressed]}
+              >
+                <Text style={s.modalCloseText}>×</Text>
+              </Pressable>
+            </View>
+            {current ? (
+              <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
+                <Image
+                  source={current.image}
+                  style={[s.modalImage, { height: ui.imageHeight }]}
+                  resizeMode="cover"
+                />
+                <View style={{ padding: ui.cardPadding }}>
+                  <Text style={[s.cardTitle, { fontSize: ui.titleSize }]}>
+                    {current.title}
+                    {current.subtitle ? (
+                      <Text style={[s.cardSubtitle, { fontSize: ui.subtitleSize }]}>
+                        {'  '}
+                        {current.subtitle}
+                      </Text>
+                    ) : null}
+                  </Text>
+                  <View style={s.divider} />
+                  <Text
+                    style={[
+                      s.cardText,
+                      {
+                        fontSize: ui.textSize,
+                        lineHeight: ui.textLineHeight,
+                      },
+                    ]}
+                  >
+                    {current.description}
+                  </Text>
+                </View>
+              </ScrollView>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <SafeAreaView style={s.safe}>
         <View
           style={[
@@ -269,182 +345,65 @@ export function CardsScreen({ onBack, onSwipeLeft, onSwipeRight, onSwipeUp }: Pr
             <Text style={[s.backIcon, { fontSize: ui.backIconSize }]}>‹</Text>
           </Pressable>
 
-          <Text style={[s.topTitle, { fontSize: ui.topTitleSize }]}>Свайпай!</Text>
+          <Text style={[s.topTitle, { fontSize: ui.topTitleSize }]}>Лента</Text>
 
           <View style={{ width: ui.backBtnSize }} />
         </View>
 
         <View style={[s.stage, { paddingHorizontal: ui.horizontalPadding }]}>
-          <View style={[s.cardStack, { width: ui.cardWidth }]}>
-            {next ? (
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  s.nextCardWrap,
-                  {
-                    width: ui.cardWidth,
-                    transform: [
-                      { translateY: Animated.add(nextCardTranslateY, nextCardTranslateYFromUp) },
-                      { scale: nextCardScale },
-                    ],
-                    opacity: nextCardOpacity,
-                  },
+          {current ? (
+            <Animated.View
+              key={current.id}
+              style={[s.cardSlot, { width: ui.cardWidth }, cardMotionStyle]}
+              collapsable={false}
+              {...panResponder.panHandlers}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Открыть анкету"
+                onPress={() => setDetailOpen(true)}
+                style={({ pressed }) => [
+                  s.card,
+                  { borderRadius: ui.cardRadius },
+                  pressed && s.cardPressed,
                 ]}
               >
-                <View
-                  style={[
-                    s.card,
-                    s.nextCard,
-                    {
-                      borderRadius: ui.cardRadius,
-                    },
-                  ]}
-                >
-                  <Image
-                    source={next.image}
-                    style={[
-                      s.cardImage,
-                      {
-                        height: ui.imageHeight,
-                      },
-                    ]}
-                    resizeMode="cover"
-                  />
+                <Image
+                  source={current.image}
+                  style={[s.cardImage, { height: ui.imageHeight }]}
+                  resizeMode="cover"
+                  defaultSource={require('../../assets/gr1.png')}
+                />
 
-                  <View
+                <View style={[s.cardBody, { padding: ui.cardPadding }]}>
+                  <Text style={[s.cardTitle, { fontSize: ui.titleSize }]}>
+                    {current.title}
+                    {current.subtitle ? (
+                      <Text style={[s.cardSubtitle, { fontSize: ui.subtitleSize }]}>
+                        {'  '}
+                        {current.subtitle}
+                      </Text>
+                    ) : null}
+                  </Text>
+
+                  <View style={s.divider} />
+
+                  <Text
+                    numberOfLines={5}
                     style={[
-                      s.cardBody,
+                      s.cardText,
                       {
-                        padding: ui.cardPadding,
+                        fontSize: ui.textSize,
+                        lineHeight: ui.textLineHeight,
                       },
                     ]}
                   >
-                    <Text style={[s.cardTitle, { fontSize: ui.titleSize }]}>
-                      {next.title}
-                      {next.subtitle ? (
-                        <Text style={[s.cardSubtitle, { fontSize: ui.subtitleSize }]}>
-                          {'  '}
-                          {next.subtitle}
-                        </Text>
-                      ) : null}
-                    </Text>
-
-                    <View style={s.divider} />
-
-                    <Text
-                      style={[
-                        s.cardText,
-                        {
-                          fontSize: ui.textSize,
-                          lineHeight: ui.textLineHeight,
-                        },
-                      ]}
-                    >
-                      {next.description}
-                    </Text>
-                  </View>
+                    {current.description}
+                  </Text>
                 </View>
-              </Animated.View>
-            ) : null}
-
-            {current ? (
-              <Animated.View
-                style={[s.cardWrap, currentCardStyle, { width: ui.cardWidth }]}
-                {...panResponder.panHandlers}
-              >
-                <View
-                  style={[
-                    s.card,
-                    {
-                      borderRadius: ui.cardRadius,
-                    },
-                  ]}
-                >
-                  <Animated.View
-                    style={[
-                      s.badge,
-                      s.badgeRight,
-                      {
-                        opacity: likeOpacity,
-                        transform: [{ rotate: likeRotate }],
-                      },
-                    ]}
-                  >
-                    <Text style={s.badgeText}>LIKE</Text>
-                  </Animated.View>
-
-                  <Animated.View
-                    style={[
-                      s.badge,
-                      s.badgeLeft,
-                      {
-                        opacity: nopeOpacity,
-                        transform: [{ rotate: nopeRotate }],
-                      },
-                    ]}
-                  >
-                    <Text style={s.badgeText}>NOPE</Text>
-                  </Animated.View>
-
-                  <Animated.View
-                    style={[
-                      s.badge,
-                      s.badgeTop,
-                      {
-                        opacity: saveOpacity,
-                      },
-                    ]}
-                  >
-                    <Text style={s.badgeText}>SAVE</Text>
-                  </Animated.View>
-
-                  <Image
-                    source={current.image}
-                    style={[
-                      s.cardImage,
-                      {
-                        height: ui.imageHeight,
-                      },
-                    ]}
-                    resizeMode="cover"
-                  />
-
-                  <View
-                    style={[
-                      s.cardBody,
-                      {
-                        padding: ui.cardPadding,
-                      },
-                    ]}
-                  >
-                    <Text style={[s.cardTitle, { fontSize: ui.titleSize }]}>
-                      {current.title}
-                      {current.subtitle ? (
-                        <Text style={[s.cardSubtitle, { fontSize: ui.subtitleSize }]}>
-                          {'  '}
-                          {current.subtitle}
-                        </Text>
-                      ) : null}
-                    </Text>
-
-                    <View style={s.divider} />
-
-                    <Text
-                      style={[
-                        s.cardText,
-                        {
-                          fontSize: ui.textSize,
-                          lineHeight: ui.textLineHeight,
-                        },
-                      ]}
-                    >
-                      {current.description}
-                    </Text>
-                  </View>
-                </View>
-              </Animated.View>
-            ) : null}
-          </View>
+              </Pressable>
+            </Animated.View>
+          ) : null}
         </View>
 
         <View
@@ -457,7 +416,7 @@ export function CardsScreen({ onBack, onSwipeLeft, onSwipeRight, onSwipeUp }: Pr
           ]}
         >
           <Text style={[s.hintText, { fontSize: ui.hintSize }]}>
-            Свайп: влево/вправо или вверх (сохранить)
+            Свайп влево, вправо или вверх — следующая анкета. Тап по карточке — подробности.
           </Text>
         </View>
       </SafeAreaView>
@@ -512,35 +471,24 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  cardStack: {
-    justifyContent: 'center',
-    alignItems: 'center',
+  cardSlot: {
+    maxWidth: '100%',
   },
 
-  nextCardWrap: {
-    position: 'absolute',
-    zIndex: 1,
-  },
-
-  cardWrap: {
-    width: '100%',
-    zIndex: 2,
+  cardPressed: {
+    opacity: 0.97,
   },
 
   card: {
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: 'rgba(255,255,255,0.94)',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.10)',
     shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
     elevation: 8,
-  },
-
-  nextCard: {
-    opacity: 0.98,
   },
 
   cardImage: {
@@ -583,38 +531,66 @@ const s = StyleSheet.create({
     textShadowRadius: 8,
   },
 
-  badge: {
-    position: 'absolute',
-    zIndex: 5,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 2,
-    backgroundColor: 'rgba(255,255,255,0.88)',
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
   },
 
-  badgeLeft: {
-    top: 22,
-    left: 18,
-    borderColor: '#d45b5b',
+  modalCard: {
+    width: '100%',
+    maxHeight: '88%',
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.10)',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.22,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 12,
   },
 
-  badgeRight: {
-    top: 22,
-    right: 18,
-    borderColor: '#68b36b',
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.12)',
   },
 
-  badgeTop: {
-    top: 20,
-    alignSelf: 'center',
-    borderColor: '#6a8fd8',
-  },
-
-  badgeText: {
-    fontSize: 16,
-    fontWeight: '800',
+  modalTitle: {
     color: '#3D3B2F',
-    letterSpacing: 1,
+    fontWeight: '800',
+  },
+
+  modalCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  modalCloseText: {
+    fontSize: 26,
+    color: '#3D3B2F',
+    marginTop: -2,
+    fontWeight: '500',
+  },
+
+  modalScroll: {
+    flexGrow: 0,
+  },
+
+  modalImage: {
+    width: '100%',
+    backgroundColor: '#D7DCE3',
   },
 });
